@@ -5,4 +5,4 @@
 Extensive Azure learning guides for a hypothetical Azure Pet Store walking you thorugh many Azure services and development scenarios using pre built web applications and microdervices.
 
 > You can view the live deployment here https://azurepetstore.com
-> Edited to start CI CD
+> deleted to start CI CD
