@@ -1,7 +1,14 @@
 package com.chtrembl.petstoreapp.controller;
 
+import java.util.Optional;
+
+import javax.servlet.http.HttpServletRequest;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.chtrembl.petstoreapp.model.User;
@@ -33,4 +40,19 @@ public class RestAPIController {
 		return this.sessionUser.getSessionId();
 	}
 
+	@GetMapping(value = "/introspectionSimulation", produces = MediaType.APPLICATION_JSON_VALUE)
+	public String introspectionSimulation(Model model, HttpServletRequest request,
+			@RequestParam(name = "sessionIdToIntrospect") Optional<String> sessionIdToIntrospect) {
+		boolean active = (sessionIdToIntrospect != null && sessionIdToIntrospect.isPresent()
+				&& sessionIdToIntrospect.get() != null
+				&& sessionIdToIntrospect.get().equals(request.getHeader("session-id")));
+
+			return "{\n" + 
+				"  \"active\": " + active + ",\n" + 
+					"  \"scope\": \"read write email\",\n" + 
+					"  \"client_id\": \""+request.getHeader("session-id")+"\",\n" + 
+					"  \"username\": \""+request.getHeader("session-id")+"\",\n" + 
+					"  \"exp\": 1911221039\n" + 
+					"}";
+		}
 }

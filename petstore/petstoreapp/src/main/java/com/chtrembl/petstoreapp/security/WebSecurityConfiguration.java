@@ -38,13 +38,18 @@ public class WebSecurityConfiguration extends WebSecurityConfigurerAdapter {
 		if (this.aadB2COidcLoginConfigurerWrapper != null
 				&& this.aadB2COidcLoginConfigurerWrapper.getConfigurer() != null) {
 
-			http.authorizeRequests().antMatchers("/").permitAll()
+			http.csrf().ignoringAntMatchers("/signalr/**").and().authorizeRequests().antMatchers("/")
+					.permitAll()
 					.antMatchers("/*breed*").permitAll()
 					.antMatchers("/*product*").permitAll()
 					.antMatchers("/*cart*").permitAll()
 					.antMatchers("/api/contactus").permitAll()
 					.antMatchers("/slowness").permitAll()
 					.antMatchers("/exception").permitAll()
+					.antMatchers("/introspectionSimulation*").permitAll()
+					.antMatchers("/bingSearch*").permitAll()
+					.antMatchers("/signalr/negotiate").permitAll()
+					.antMatchers("/signalr/test").permitAll()
 					.antMatchers("/login*").permitAll().anyRequest()
 					.authenticated().and().apply(this.aadB2COidcLoginConfigurerWrapper.getConfigurer()).and()
 					.oauth2Login().loginPage("/login");

@@ -2,7 +2,10 @@ package com.chtrembl.petstoreapp.controller;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 import javax.servlet.http.HttpServletRequest;
@@ -12,6 +15,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.caffeine.CaffeineCache;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Controller;
@@ -26,7 +31,9 @@ import com.chtrembl.petstoreapp.model.ContainerEnvironment;
 import com.chtrembl.petstoreapp.model.Order;
 import com.chtrembl.petstoreapp.model.Pet;
 import com.chtrembl.petstoreapp.model.User;
+import com.chtrembl.petstoreapp.model.WebPages;
 import com.chtrembl.petstoreapp.service.PetStoreService;
+import com.chtrembl.petstoreapp.service.SearchService;
 import com.microsoft.applicationinsights.telemetry.PageViewTelemetry;
 import com.nimbusds.jose.shaded.json.JSONArray;
 
@@ -45,16 +52,33 @@ public class WebAppController {
 	private PetStoreService petStoreService;
 
 	@Autowired
+	private SearchService searchService;
+
+	@Autowired
 	private User sessionUser;
+
+	@Autowired
+	private CacheManager currentUsersCacheManager;
 
 	@ModelAttribute
 	public void setModel(HttpServletRequest request, Model model, OAuth2AuthenticationToken token) {
 
+		CaffeineCache caffeineCache = (CaffeineCache) this.currentUsersCacheManager
+				.getCache(ContainerEnvironment.CURRENT_USERS_HUB);
+		com.github.benmanes.caffeine.cache.Cache<Object, Object> nativeCache = caffeineCache.getNativeCache();
+
 		// this is used for n tier correlated Telemetry. Keep the same one for anonymous
-		// sessions that get authenticated
+		// sessions that get authenticateds
 		if (this.sessionUser.getSessionId() == null) {
-			this.sessionUser.setSessionId(RequestContextHolder.currentRequestAttributes().getSessionId());
+			String sessionId = RequestContextHolder.currentRequestAttributes().getSessionId();
+			this.sessionUser.setSessionId(sessionId);
+			// put session in TTL cache so its there after initial login
+			caffeineCache.put(this.sessionUser.getSessionId(), this.sessionUser.getName());
+			this.containerEnvironment.sendCurrentUsers();
 		}
+
+		// put session in TTL cache to refresh TTL
+		caffeineCache.put(this.sessionUser.getSessionId(), this.sessionUser.getName());
 
 		if (token != null) {
 			final OAuth2User user = token.getPrincipal();
@@ -90,6 +114,9 @@ public class WebAppController {
 		model.addAttribute("appVersion", this.containerEnvironment.getAppVersion());
 
 		model.addAttribute("cartSize", this.sessionUser.getCartCount());
+
+		model.addAttribute("currentUsersOnSite", nativeCache.asMap().keySet().size());
+		model.addAttribute("signalRNegotiationURL", this.containerEnvironment.getSignalRNegotiationURL());
 
 		MDC.put("session_Id", this.sessionUser.getSessionId());
 	}
@@ -271,5 +298,19 @@ public class WebAppController {
 		pageViewTelemetry.setName("landing");
 		this.sessionUser.getTelemetryClient().trackPageView(pageViewTelemetry);
 		return "home";
+	}
+
+	@GetMapping(value = "/bingSearch")
+	public String bingSearch(Model model) throws URISyntaxException {
+		logger.info(String.format("PetStoreApp /bingsearch requested for %s, routing to bingSearch view...",
+				this.sessionUser.getName()));
+		String companies[] = { "Chewy", "PetCo", "PetSmart", "Walmart" };
+		List<String> companiesList = Arrays.asList(companies);
+		List<WebPages> webpages = new ArrayList<>();
+		companiesList.forEach(company -> webpages.add(this.searchService.bingSearch(company)));
+		model.addAttribute("companies", companiesList);
+		model.addAttribute("webpages", webpages);
+
+		return "bingSearch";
 	}
 }
